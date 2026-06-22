@@ -166,13 +166,20 @@ if command -v docker >/dev/null 2>&1; then
     ok "${WORK_DIR}/docker/volume-details.json"
 
     # Find all compose files
-    log "Searching for compose files (this may take a moment)..."
-    find / \( -name "docker-compose.yml" \
-           -o -name "docker-compose.yaml" \
-           -o -name "compose.yml" \
-           -o -name "compose.yaml" \) \
-        ! -path "*/proc/*" ! -path "*/sys/*" ! -path "*/.git/*" \
-        2>/dev/null > "${WORK_DIR}/docker/compose-locations.txt"
+    # -xdev: stay on the current filesystem — avoids crawling /proc, /sys,
+    # and large mounted drives. We search a targeted list of likely locations
+    # rather than / to keep this fast and safe under set -eu.
+    log "Searching for compose files..."
+    > "${WORK_DIR}/docker/compose-locations.txt"
+    for _search in /root /home /opt /srv /etc /usr/local /var/lib; do
+        [ -d "$_search" ] || continue
+        find "$_search" -xdev \
+            \( -name "docker-compose.yml" \
+            -o -name "docker-compose.yaml" \
+            -o -name "compose.yml" \
+            -o -name "compose.yaml" \) \
+            2>/dev/null >> "${WORK_DIR}/docker/compose-locations.txt" || true
+    done
     ok "${WORK_DIR}/docker/compose-locations.txt"
 
     # Copy compose files — read from file, not pipe, so no subshell
